@@ -4,10 +4,14 @@ Overlay Window - Transparent window that displays on top of the game
 
 from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                               QLabel, QPushButton, QTabWidget, QScrollArea,
-                              QTableWidget, QTableWidgetItem)
+                              QTableWidget, QTableWidgetItem, QComboBox)
 from PyQt5.QtCore import Qt, QTimer, QPoint
 from PyQt5.QtGui import QFont, QColor, QPalette
+from src.ui.resale_calculator import ResaleCalculatorWidget
 import config
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class OverlayWindow(QMainWindow):
@@ -19,8 +23,10 @@ class OverlayWindow(QMainWindow):
         self.db_manager = db_manager
         self.dragging = False
         self.offset = QPoint()
+        self.current_league = config.CURRENT_LEAGUE
 
         self.init_ui()
+        self.load_available_leagues()
         self.setup_update_timer()
 
     def init_ui(self):
@@ -110,6 +116,7 @@ class OverlayWindow(QMainWindow):
 
         # Create tabs
         self.create_exchange_tab()
+        self.create_calculator_tab()
         self.create_history_tab()
         self.create_statistics_tab()
 
@@ -118,9 +125,36 @@ class OverlayWindow(QMainWindow):
         title_layout = QHBoxLayout()
 
         # Title label
-        title_label = QLabel("PoE Currency Exchange Helper")
+        title_label = QLabel("PoE Currency Helper")
         title_label.setStyleSheet("font-size: 14px; font-weight: bold; color: #FFD700;")
         title_layout.addWidget(title_label)
+
+        # League selector
+        league_label = QLabel("League:")
+        league_label.setStyleSheet("font-size: 11px; margin-left: 10px;")
+        title_layout.addWidget(league_label)
+
+        self.league_selector = QComboBox()
+        self.league_selector.setStyleSheet("""
+            QComboBox {
+                background-color: #3a3a3a;
+                color: white;
+                border: 1px solid #FFD700;
+                padding: 3px;
+                min-width: 120px;
+            }
+            QComboBox::drop-down {
+                border: none;
+            }
+            QComboBox::down-arrow {
+                image: none;
+                border-left: 5px solid transparent;
+                border-right: 5px solid transparent;
+                border-top: 5px solid #FFD700;
+            }
+        """)
+        self.league_selector.currentTextChanged.connect(self.on_league_changed)
+        title_layout.addWidget(self.league_selector)
 
         title_layout.addStretch()
 
@@ -160,6 +194,11 @@ class OverlayWindow(QMainWindow):
         layout.addWidget(refresh_btn)
 
         self.tabs.addTab(exchange_widget, "Exchange Rates")
+
+    def create_calculator_tab(self):
+        """Create the resale calculator tab"""
+        calculator_widget = ResaleCalculatorWidget(self.currency_tracker)
+        self.tabs.addTab(calculator_widget, "Calculator")
 
     def create_history_tab(self):
         """Create the price history tab"""
@@ -274,6 +313,45 @@ class OverlayWindow(QMainWindow):
         self.stats_labels['most_profitable'].setText(stats.get('most_profitable', 'N/A'))
         self.stats_labels['avg_profit'].setText(f"{stats.get('avg_profit', 0):.2f}%")
         self.stats_labels['best_time'].setText(stats.get('best_time', 'N/A'))
+
+    def load_available_leagues(self):
+        """Load available leagues from API"""
+        try:
+            from src.api.poe_ninja_client import PoeNinjaClient
+            client = PoeNinjaClient()
+            leagues = client.get_available_leagues()
+
+            self.league_selector.clear()
+            self.league_selector.addItems(leagues)
+
+            # Set current league
+            if self.current_league in leagues:
+                self.league_selector.setCurrentText(self.current_league)
+            elif leagues:
+                self.current_league = leagues[0]
+                self.league_selector.setCurrentText(self.current_league)
+
+            logger.info(f"Loaded {len(leagues)} leagues")
+
+        except Exception as e:
+            logger.error(f"Failed to load leagues: {e}")
+            # Add default league
+            self.league_selector.addItem(self.current_league)
+
+    def on_league_changed(self, league):
+        """Handle league selection change"""
+        if not league or league == self.current_league:
+            return
+
+        logger.info(f"League changed: {self.current_league} -> {league}")
+        self.current_league = league
+
+        # Update config
+        config.CURRENT_LEAGUE = league
+
+        # Refresh data for new league
+        self.currency_tracker.fetch_prices()
+        self.update_data()
 
     def mousePressEvent(self, event):
         """Handle mouse press for dragging"""

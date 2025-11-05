@@ -55,38 +55,43 @@ class PoeNinjaClient:
             logger.error(f"Failed to fetch currency data: {e}")
             return {}
 
-    def get_fragment_overview(self, league=None):
+    def get_available_leagues(self):
         """
-        Get fragment overview data (for special currencies)
-
-        Args:
-            league (str): League name
+        Get list of available leagues from poe.ninja
 
         Returns:
-            dict: Fragment data or empty dict on error
+            list: List of league names
         """
-        if league is None:
-            league = config.CURRENT_LEAGUE
-
         try:
-            url = f"{self.base_url}/currencyoverview"
-            params = {
-                'league': league,
-                'type': 'Fragment'
-            }
+            # poe.ninja endpoint that returns economy state including leagues
+            url = "https://poe.ninja/api/data/getindexstate"
+            params = {'league': 'Standard', 'type': 'Currency'}
 
-            response = self.session.get(
-                url,
-                params=params,
-                timeout=config.REQUEST_TIMEOUT
-            )
+            response = self.session.get(url, params=params, timeout=config.REQUEST_TIMEOUT)
             response.raise_for_status()
 
-            return response.json()
+            data = response.json()
+
+            # Extract unique league names from the economy leagues
+            leagues = []
+            if 'economyLeagues' in data:
+                for league_data in data['economyLeagues']:
+                    league_name = league_data.get('name', '')
+                    if league_name and league_name not in leagues:
+                        leagues.append(league_name)
+
+            # If API doesn't return leagues, provide default list
+            if not leagues:
+                leagues = ['Standard', 'Hardcore', 'Challenge', 'Hardcore Challenge']
+                logger.warning("Could not fetch leagues from API, using defaults")
+
+            logger.info(f"Found {len(leagues)} leagues: {leagues}")
+            return leagues
 
         except requests.exceptions.RequestException as e:
-            logger.error(f"Failed to fetch fragment data: {e}")
-            return {}
+            logger.error(f"Failed to fetch available leagues: {e}")
+            # Return common leagues as fallback
+            return ['Standard', 'Hardcore', 'Settlers', 'Hardcore Settlers']
 
     def _process_currency_data(self, raw_data):
         """
@@ -144,22 +149,16 @@ class PoeNinjaClient:
 
     def get_all_currencies(self, league=None):
         """
-        Get all currency data including both standard and fragments
+        Get currency data (only Currency type, no fragments)
 
         Args:
             league (str): League name
 
         Returns:
-            dict: Combined currency data
+            dict: Currency data
         """
+        # Only fetch Currency type, not fragments
         currencies = self.get_currency_overview(league)
-        fragments = self.get_fragment_overview(league)
-
-        # Combine both datasets
-        if fragments and 'lines' in fragments:
-            fragment_data = self._process_currency_data(fragments)
-            currencies.update(fragment_data)
-
         return currencies
 
     def test_connection(self):
