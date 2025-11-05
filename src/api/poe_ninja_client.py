@@ -59,8 +59,10 @@ class PoeNinjaClient:
         """
         Get list of available leagues from poe.ninja
 
+        Returns only active leagues (Standard, Hardcore, and current challenge leagues)
+
         Returns:
-            list: List of league names
+            list: List of active league names
         """
         try:
             # poe.ninja endpoint that returns economy state including leagues
@@ -73,25 +75,60 @@ class PoeNinjaClient:
             data = response.json()
 
             # Extract unique league names from the economy leagues
-            leagues = []
+            all_leagues = []
             if 'economyLeagues' in data:
                 for league_data in data['economyLeagues']:
                     league_name = league_data.get('name', '')
-                    if league_name and league_name not in leagues:
-                        leagues.append(league_name)
+                    if league_name and league_name not in all_leagues:
+                        all_leagues.append(league_name)
 
-            # If API doesn't return leagues, provide default list
-            if not leagues:
-                leagues = ['Standard', 'Hardcore', 'Challenge', 'Hardcore Challenge']
+            # Filter out old/event leagues - keep only active ones
+            active_leagues = []
+
+            # Always include permanent leagues
+            permanent_leagues = ['Standard', 'Hardcore']
+            for league in permanent_leagues:
+                if league in all_leagues:
+                    active_leagues.append(league)
+
+            # Add current challenge leagues (not event/past leagues)
+            # Current challenge leagues don't contain these keywords
+            excluded_keywords = [
+                'Event', 'Race', 'SSF', 'Private', '(',
+                'Flashback', 'Mayhem', 'Turmoil', 'Void',
+                'Beta', 'Alpha'
+            ]
+
+            for league in all_leagues:
+                if league in permanent_leagues:
+                    continue
+
+                # Check if it's not an excluded league
+                is_valid = True
+                for keyword in excluded_keywords:
+                    if keyword.lower() in league.lower():
+                        is_valid = False
+                        break
+
+                if is_valid and league not in active_leagues:
+                    active_leagues.append(league)
+
+            # Limit to most recent leagues (max 6-8 leagues shown)
+            # Usually: Standard, Hardcore, CurrentLeague, HC CurrentLeague
+            active_leagues = active_leagues[:8]
+
+            # If no leagues found, use fallback
+            if not active_leagues:
+                active_leagues = ['Standard', 'Hardcore']
                 logger.warning("Could not fetch leagues from API, using defaults")
 
-            logger.info(f"Found {len(leagues)} leagues: {leagues}")
-            return leagues
+            logger.info(f"Found {len(active_leagues)} active leagues: {active_leagues}")
+            return active_leagues
 
         except requests.exceptions.RequestException as e:
             logger.error(f"Failed to fetch available leagues: {e}")
             # Return common leagues as fallback
-            return ['Standard', 'Hardcore', 'Settlers', 'Hardcore Settlers']
+            return ['Standard', 'Hardcore']
 
     def get_unique_items(self, league=None):
         """
