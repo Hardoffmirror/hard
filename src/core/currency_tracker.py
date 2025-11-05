@@ -29,6 +29,7 @@ class CurrencyTracker:
         self.poe_trade = PoeTradeClient()
 
         self.current_rates = {}
+        self.current_league = config.CURRENT_LEAGUE
         self.is_running = False
         self.stop_event = Event()
         self.update_thread = None

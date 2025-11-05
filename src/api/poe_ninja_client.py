@@ -93,6 +93,63 @@ class PoeNinjaClient:
             # Return common leagues as fallback
             return ['Standard', 'Hardcore', 'Settlers', 'Hardcore Settlers']
 
+    def get_unique_items(self, league=None):
+        """
+        Get unique item prices from poe.ninja
+
+        Args:
+            league (str): League name
+
+        Returns:
+            dict: Unique item prices keyed by item name
+        """
+        if league is None:
+            league = config.CURRENT_LEAGUE
+
+        try:
+            url = f"{self.base_url}/itemoverview"
+
+            # poe.ninja has multiple categories for uniques
+            categories = ['unique-weapon', 'unique-armour', 'unique-accessory', 'unique-jewel']
+            all_items = {}
+
+            for category in categories:
+                params = {
+                    'league': league,
+                    'type': category
+                }
+
+                response = self.session.get(
+                    url,
+                    params=params,
+                    timeout=config.REQUEST_TIMEOUT
+                )
+                response.raise_for_status()
+
+                data = response.json()
+
+                if 'lines' in data:
+                    for item in data['lines']:
+                        item_name = item.get('name', 'Unknown')
+                        chaos_value = item.get('chaosValue', 0)
+
+                        all_items[item_name] = {
+                            'chaosValue': chaos_value,
+                            'divineValue': item.get('divineValue', 0),
+                            'category': category,
+                            'icon': item.get('icon', ''),
+                            'links': item.get('links', 0),
+                            'variant': item.get('variant', None),
+                            'itemClass': item.get('itemClass', 0),
+                        }
+
+            logger.info(f"Fetched prices for {len(all_items)} unique items")
+            return all_items
+
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Failed to fetch unique item prices: {e}")
+            return {}
+
     def _process_currency_data(self, raw_data):
         """
         Process raw API data into structured format

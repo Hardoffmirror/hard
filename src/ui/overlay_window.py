@@ -8,6 +8,7 @@ from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
 from PyQt5.QtCore import Qt, QTimer, QPoint
 from PyQt5.QtGui import QFont, QColor, QPalette
 from src.ui.resale_calculator import ResaleCalculatorWidget
+from src.ui.recipe_calculator import RecipeCalculatorWidget
 import config
 import logging
 
@@ -117,6 +118,7 @@ class OverlayWindow(QMainWindow):
         # Create tabs
         self.create_exchange_tab()
         self.create_calculator_tab()
+        self.create_recipe_tab()
         self.create_history_tab()
         self.create_statistics_tab()
 
@@ -199,6 +201,11 @@ class OverlayWindow(QMainWindow):
         """Create the resale calculator tab"""
         calculator_widget = ResaleCalculatorWidget(self.currency_tracker)
         self.tabs.addTab(calculator_widget, "Calculator")
+
+    def create_recipe_tab(self):
+        """Create the recipe calculator tab"""
+        recipe_widget = RecipeCalculatorWidget(self.currency_tracker)
+        self.tabs.addTab(recipe_widget, "Recipes")
 
     def create_history_tab(self):
         """Create the price history tab"""
